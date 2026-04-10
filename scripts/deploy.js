@@ -1,0 +1,42 @@
+const { ethers, upgrades } = require("hardhat");
+
+async function main() {
+  const [deployer, marketing, dogPark, dev, charity, buyer] = await ethers.getSigners();
+
+  console.log("Deployer:", deployer.address);
+  console.log("Buyer:   ", buyer.address);
+
+  const TOKEN_PRICE = ethers.parseUnits("0.0001", "ether"); // 0.0001 ETH per token
+
+  const Token = await ethers.getContractFactory("Token");
+
+  const token = await upgrades.deployProxy(
+    Token,
+    [marketing.address, dogPark.address, dev.address, charity.address, TOKEN_PRICE],
+    { initializer: "initialize", kind: "uups" }
+  );
+
+  await token.waitForDeployment();
+  const tokenAddress = await token.getAddress();
+
+  console.log("\nProxy deployed to:      ", tokenAddress);
+  console.log("Implementation deployed:", await upgrades.erc1967.getImplementationAddress(tokenAddress));
+
+  // --- Buy tokens as buyer (signer index 5) ---
+  const AMOUNT = 10n; // buy 10 tokens
+  const cost = AMOUNT * TOKEN_PRICE;
+
+  console.log("\n--- Buying tokens ---");
+  console.log("Buyer balance before:", ethers.formatUnits(await token.balanceOf(buyer.address), 18), "$BARK");
+
+  const tx = await token.connect(buyer).buyToken(AMOUNT, { value: cost });
+  await tx.wait();
+
+  console.log("Buyer balance after: ", ethers.formatUnits(await token.balanceOf(buyer.address), 18), "$BARK");
+  console.log("Contract ETH balance:", ethers.formatEther(await ethers.provider.getBalance(tokenAddress)), "ETH");
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
