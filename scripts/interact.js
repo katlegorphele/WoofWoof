@@ -59,7 +59,7 @@ async function main() {
     let receipt = await tx.wait();
     await printTax(receipt, token);
     console.log("  buyer1 balance  :", fmt(await token.balanceOf(buyer1.address)), "$BARK");
-    console.log("  rewardPerToken  :", fmt(await token.rewardPerToken()), "(buys are fee-free — no reflection yet)");
+    console.log("  rewardPerToken  :", fmt(await token.rewardPerToken()));
 
     // Buyer2 buys 2,000,000 tokens
     console.log("\nBuyer2 buys 2,000,000 $BARK");
@@ -68,7 +68,7 @@ async function main() {
     await printTax(receipt, token);
     console.log("  buyer1 balance  :", fmt(await token.balanceOf(buyer1.address)), "$BARK");
     console.log("  buyer2 balance  :", fmt(await token.balanceOf(buyer2.address)), "$BARK");
-    console.log("  rewardPerToken  :", fmt(await token.rewardPerToken()), "(still 0 — reflection only fires on transfers)");
+    console.log("  rewardPerToken  :", fmt(await token.rewardPerToken()));
 
     // Buyer3 buys 500,000 tokens
     console.log("\nBuyer3 buys 500,000 $BARK");
@@ -103,9 +103,9 @@ async function main() {
     console.log("  buyer3 balance  :", fmt(await token.balanceOf(buyer3.address)), "$BARK  <- grew again");
     console.log("  rewardPerToken  :", fmt(await token.rewardPerToken()));
 
-    // ─────────────────────────────────────────────
-    // REFLECTION
-    // ─────────────────────────────────────────────
+    // // ─────────────────────────────────────────────
+    // // REFLECTION
+    // // ─────────────────────────────────────────────
     console.log("\n--- REFLECTION ---");
     console.log("Buyer3 has done nothing since buying. Watch their balance grow as others trade.");
 
@@ -132,9 +132,9 @@ async function main() {
     console.log("  buyer3 balance after settlement:", fmt(await token.balanceOf(buyer3.address)), "$BARK");
     console.log("  rewardPerToken               :", fmt(await token.rewardPerToken()));
 
-    // ─────────────────────────────────────────────
-    // OWNER CONTROLS
-    // ─────────────────────────────────────────────
+    // // ─────────────────────────────────────────────
+    // // OWNER CONTROLS
+    // // ─────────────────────────────────────────────
     console.log("\n--- OWNER CONTROLS ---");
 
     // Update token price
@@ -190,7 +190,7 @@ async function main() {
     console.log("  buyer3                :", fmt(await token.balanceOf(buyer3.address)),      "$BARK");
 
     console.log("\nProtocol stats:");
-    console.log("  total supply   :", fmt(totalSupply), "$BARK (> 500M because reflection mints tokens to holders)");
+    console.log("  total supply   :", fmt(totalSupply), "$BARK (deflationary — burns exceed minted reflection)");
     console.log("  rewardPerToken :", fmt(rewardPerToken), "(cumulative reflection rate)");
     console.log("  contract ETH   :", ethers.formatEther(await ethers.provider.getBalance(tokenAddress)), "ETH");
 }
