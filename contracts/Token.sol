@@ -31,6 +31,12 @@ contract Token is
     bool private _inTaxTransfer;
     bool private _locked;
 
+    // Reflection
+    uint256 public rewardPerToken;
+    mapping(address => uint256) public rewardDebt;
+    mapping(address => bool) public isExcludedFromReflection;
+    mapping(address => bool) private _settling;
+
     modifier nonReentrant() {
         require(!_locked, "Reentrant call");
         _locked = true;
@@ -38,15 +44,38 @@ contract Token is
         _locked = false;
     }
 
-    // Reserve 50 slots for future storage variables without colliding
+    // Reserve slots for future storage variables without colliding
     // with existing layout. Reduce this number by 1 for each new variable added.
-    uint256[50] private __gap;
+    uint256[46] private __gap;
 
     //events
     event TokensPurchased(address indexed buyer, uint256 amount, uint256 cost);
     event TaxDeducted(address indexed from, uint256 reflection, uint256 liquidity, uint256 marketingTax);
     event TokenPriceUpdated(uint256 oldPrice, uint256 newPrice);
     event Blacklisted(address indexed account, bool status);
+
+    // --- Reflection ---
+
+    function balanceOf(address account) public view override returns (uint256) {
+        uint256 base = super.balanceOf(account);
+        if (isExcludedFromReflection[account]) return base;
+        return base + (rewardPerToken - rewardDebt[account]) * base / 1e18;
+    }
+
+    function _settleReward(address account) internal {
+        if (isExcludedFromReflection[account] || _settling[account]) return;
+        _settling[account] = true;
+        uint256 base = super.balanceOf(account);
+        uint256 pending = (rewardPerToken - rewardDebt[account]) * base / 1e18;
+        if (pending > 0) _mint(account, pending);
+        rewardDebt[account] = rewardPerToken;
+        _settling[account] = false;
+    }
+
+    function _distributeReflection(uint256 amount) internal {
+        uint256 supply = totalSupply();
+        if (supply > 0) rewardPerToken += amount * 1e18 / supply;
+    }
 
     //initialize state
     function initialize(
@@ -72,12 +101,22 @@ contract Token is
         tokenPrice = _tokenPrice;
 
         // Exclude system addresses from fees
+        isExcludedFromFee[address(0)]  = true; // minting must not be taxed
         isExcludedFromFee[msg.sender]  = true;
         isExcludedFromFee[_marketing]  = true;
         isExcludedFromFee[_dogPark]    = true;
         isExcludedFromFee[_dev]        = true;
         isExcludedFromFee[_charity]    = true;
         isExcludedFromFee[address(this)] = true;
+
+        // Exclude system addresses from reflection rewards
+        isExcludedFromReflection[address(0)]    = true; // burn address earns nothing
+        isExcludedFromReflection[msg.sender]    = true;
+        isExcludedFromReflection[_marketing]    = true;
+        isExcludedFromReflection[_dogPark]      = true;
+        isExcludedFromReflection[_dev]          = true;
+        isExcludedFromReflection[_charity]      = true;
+        isExcludedFromReflection[address(this)] = true;
 
         // Mint per tokenomics (Requirements.md)
         _mint(_marketing,    TOTAL_SUPPLY * 20 / 100); // 20% marketing
@@ -103,6 +142,10 @@ contract Token is
 
     function setExcludedFromFee(address account, bool excluded) external onlyOwner {
         isExcludedFromFee[account] = excluded;
+    }
+
+    function setExcludedFromReflection(address account, bool excluded) external onlyOwner {
+        isExcludedFromReflection[account] = excluded;
     }
 
     function pause()   external onlyOwner { _pause(); }
@@ -145,6 +188,7 @@ contract Token is
 
         _inTaxTransfer = true;
         super._update(from, address(0), reflection);
+        _distributeReflection(reflection);
         super._update(from, address(this), liquidity);
         super._update(from, marketing, marketingTax);
         _inTaxTransfer = false;
@@ -155,6 +199,9 @@ contract Token is
 
     //Override _transfer to have transaction tax
     function _update(address from, address to, uint256 amount) internal override whenNotPaused {
+        _settleReward(from);
+        _settleReward(to);
+
         require(!blacklisted[from] && !blacklisted[to], "Blacklisted");
 
         if (!_inTaxTransfer && !isExcludedFromFee[from] && !isExcludedFromFee[to]) {
