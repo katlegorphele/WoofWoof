@@ -1,33 +1,30 @@
 const { ethers, upgrades } = require("hardhat");
 
-// helper to format token balances
-const fmt = (val) => ethers.formatUnits(val, 18);
+const fmt = (val) => Number(ethers.formatUnits(val, 18)).toFixed(4);
 
-async function printBalances(label, token, buyers, contractAddress, marketingAddress) {
-    console.log(`\n========== ${label} ==========`);
-    console.log(`Contract BARK : ${fmt(await token.balanceOf(contractAddress))} $BARK`);
-    console.log(`Contract ETH  : ${ethers.formatEther(await ethers.provider.getBalance(contractAddress))} ETH`);
-    console.log(`Marketing BARK: ${fmt(await token.balanceOf(marketingAddress))} $BARK`);
-    for (let i = 0; i < buyers.length; i++) {
-        console.log(`Buyer${i + 1} BARK   : ${fmt(await token.balanceOf(buyers[i].address))} $BARK`);
+function parseTax(receipt, token) {
+    return receipt.logs
+        .map(log => { try { return token.interface.parseLog(log); } catch { return null; } })
+        .find(e => e && e.name === "TaxDeducted");
+}
+
+async function printTax(receipt, token) {
+    const tax = parseTax(receipt, token);
+    if (tax) {
+        console.log(
+            `  tax  ->  reflection: ${fmt(tax.args.reflection)} | liquidity: ${fmt(tax.args.liquidity)} | marketing: ${fmt(tax.args.marketingTax)}`
+        );
     }
 }
 
 async function main() {
-    // --- Signers ---
     const [deployer, marketing, dogPark, dev, charity, buyer1, buyer2, buyer3] = await ethers.getSigners();
+    const TOKEN_PRICE = ethers.parseUnits("0.0001", "ether");
 
-    console.log("Deployer  :", deployer.address);
-    console.log("Marketing :", marketing.address);
-    console.log("DogPark   :", dogPark.address);
-    console.log("Dev       :", dev.address);
-    console.log("Charity   :", charity.address);
-    console.log("Buyer1    :", buyer1.address);
-    console.log("Buyer2    :", buyer2.address);
-    console.log("Buyer3    :", buyer3.address);
-
-    // --- Deploy ---
-    const TOKEN_PRICE = ethers.parseUnits("0.0001", "ether"); // 0.0001 ETH per token
+    // ─────────────────────────────────────────────
+    // LAUNCH
+    // ─────────────────────────────────────────────
+    console.log("\n--- LAUNCH ---");
 
     const Token = await ethers.getContractFactory("Token");
     const token = await upgrades.deployProxy(
@@ -36,104 +33,166 @@ async function main() {
         { initializer: "initialize", kind: "uups" }
     );
     await token.waitForDeployment();
-
     const tokenAddress = await token.getAddress();
-    console.log("\nProxy deployed to      :", tokenAddress);
-    console.log("Implementation deployed:", await upgrades.erc1967.getImplementationAddress(tokenAddress));
 
-    const buyers = [buyer1, buyer2, buyer3];
+    console.log("Proxy deployed      :", tokenAddress);
+    console.log("Implementation      :", await upgrades.erc1967.getImplementationAddress(tokenAddress));
+    console.log("Token price         : 0.0001 ETH per $BARK");
 
-    // --- Balances after deployment ---
-    await printBalances("AFTER DEPLOYMENT", token, buyers, tokenAddress, marketing.address);
+    console.log("\nInitial distribution:");
+    console.log("  marketing  :", fmt(await token.balanceOf(marketing.address)), "$BARK (20%)");
+    console.log("  dogPark    :", fmt(await token.balanceOf(dogPark.address)),   "$BARK (10%)");
+    console.log("  dev        :", fmt(await token.balanceOf(dev.address)),        "$BARK  (5%)");
+    console.log("  charity    :", fmt(await token.balanceOf(charity.address)),    "$BARK  (5%)");
+    console.log("  public pool:", fmt(await token.balanceOf(tokenAddress)),       "$BARK (60%)");
+    console.log("  total supply:", fmt(await token.totalSupply()), "$BARK");
+    console.log("  rewardPerToken:", fmt(await token.rewardPerToken()), "(nothing earned yet)");
 
-    // --- Buyer1 buys 100 tokens ---
-    console.log("\n--- Buyer1 buying 100 tokens ---");
-    const amount1 = 100n;
-    const cost1 = amount1 * TOKEN_PRICE;
-    let tx = await token.connect(buyer1).buyToken(amount1, { value: cost1 });
+    // ─────────────────────────────────────────────
+    // FIRST BUY INS
+    // ─────────────────────────────────────────────
+    console.log("\n--- FIRST BUY INS ---");
+
+    // Buyer1 buys 1,000,000 tokens
+    console.log("\nBuyer1 buys 1,000,000 $BARK");
+    let tx = await token.connect(buyer1).buyToken(1_000_000n, { value: 1_000_000n * TOKEN_PRICE });
     let receipt = await tx.wait();
-    console.log("Gas used:", receipt.gasUsed.toString());
+    await printTax(receipt, token);
+    console.log("  buyer1 balance  :", fmt(await token.balanceOf(buyer1.address)), "$BARK");
+    console.log("  rewardPerToken  :", fmt(await token.rewardPerToken()), "(buys are fee-free — no reflection yet)");
 
-    // log TaxDeducted event
-    const taxEvent1 = receipt.logs
-        .map(log => { try { return token.interface.parseLog(log); } catch { return null; } })
-        .find(e => e && e.name === "TaxDeducted");
-    if (taxEvent1) {
-        console.log("Tax — Reflection:", fmt(taxEvent1.args.reflection), "| Liquidity:", fmt(taxEvent1.args.liquidity), "| Marketing:", fmt(taxEvent1.args.marketingTax));
-    }
-
-    await printBalances("AFTER BUYER1 BUYS 100 TOKENS", token, buyers, tokenAddress, marketing.address);
-
-    // --- Buyer2 buys 200 tokens ---
-    console.log("\n--- Buyer2 buying 200 tokens ---");
-    const amount2 = 200n;
-    const cost2 = amount2 * TOKEN_PRICE;
-    tx = await token.connect(buyer2).buyToken(amount2, { value: cost2 });
+    // Buyer2 buys 2,000,000 tokens
+    console.log("\nBuyer2 buys 2,000,000 $BARK");
+    tx = await token.connect(buyer2).buyToken(2_000_000n, { value: 2_000_000n * TOKEN_PRICE });
     receipt = await tx.wait();
-    console.log("Gas used:", receipt.gasUsed.toString());
+    await printTax(receipt, token);
+    console.log("  buyer1 balance  :", fmt(await token.balanceOf(buyer1.address)), "$BARK");
+    console.log("  buyer2 balance  :", fmt(await token.balanceOf(buyer2.address)), "$BARK");
+    console.log("  rewardPerToken  :", fmt(await token.rewardPerToken()), "(still 0 — reflection only fires on transfers)");
 
-    const taxEvent2 = receipt.logs
-        .map(log => { try { return token.interface.parseLog(log); } catch { return null; } })
-        .find(e => e && e.name === "TaxDeducted");
-    if (taxEvent2) {
-        console.log("Tax — Reflection:", fmt(taxEvent2.args.reflection), "| Liquidity:", fmt(taxEvent2.args.liquidity), "| Marketing:", fmt(taxEvent2.args.marketingTax));
-    }
-
-    await printBalances("AFTER BUYER2 BUYS 200 TOKENS", token, buyers, tokenAddress, marketing.address);
-
-    // --- Buyer3 buys 500 tokens ---
-    console.log("\n--- Buyer3 buying 500 tokens ---");
-    const amount3 = 500n;
-    const cost3 = amount3 * TOKEN_PRICE;
-    tx = await token.connect(buyer3).buyToken(amount3, { value: cost3 });
+    // Buyer3 buys 500,000 tokens
+    console.log("\nBuyer3 buys 500,000 $BARK");
+    tx = await token.connect(buyer3).buyToken(500_000n, { value: 500_000n * TOKEN_PRICE });
     receipt = await tx.wait();
-    console.log("Gas used:", receipt.gasUsed.toString());
+    await printTax(receipt, token);
+    console.log("  buyer1 balance  :", fmt(await token.balanceOf(buyer1.address)), "$BARK");
+    console.log("  buyer2 balance  :", fmt(await token.balanceOf(buyer2.address)), "$BARK");
+    console.log("  buyer3 balance  :", fmt(await token.balanceOf(buyer3.address)), "$BARK");
+    console.log("  rewardPerToken  :", fmt(await token.rewardPerToken()));
 
-    const taxEvent3 = receipt.logs
-        .map(log => { try { return token.interface.parseLog(log); } catch { return null; } })
-        .find(e => e && e.name === "TaxDeducted");
-    if (taxEvent3) {
-        console.log("Tax — Reflection:", fmt(taxEvent3.args.reflection), "| Liquidity:", fmt(taxEvent3.args.liquidity), "| Marketing:", fmt(taxEvent3.args.marketingTax));
-    }
+    // ─────────────────────────────────────────────
+    // COMMUNITY TRADES
+    // ─────────────────────────────────────────────
+    console.log("\n--- COMMUNITY TRADES ---");
 
-    await printBalances("AFTER BUYER3 BUYS 500 TOKENS", token, buyers, tokenAddress, marketing.address);
-
-    // --- Buyer1 transfers 50 tokens to Buyer2 (tax applies) ---
-    console.log("\n--- Buyer1 transfers 50 tokens to Buyer2 ---");
-    const transferAmount = ethers.parseUnits("50", 18);
-    tx = await token.connect(buyer1).transfer(buyer2.address, transferAmount);
+    console.log("\nBuyer1 transfers 200,000 $BARK to Buyer2");
+    tx = await token.connect(buyer1).transfer(buyer2.address, ethers.parseUnits("200000", 18));
     receipt = await tx.wait();
-    console.log("Gas used:", receipt.gasUsed.toString());
+    await printTax(receipt, token);
+    console.log("  buyer1 balance  :", fmt(await token.balanceOf(buyer1.address)), "$BARK");
+    console.log("  buyer2 balance  :", fmt(await token.balanceOf(buyer2.address)), "$BARK");
+    console.log("  buyer3 balance  :", fmt(await token.balanceOf(buyer3.address)), "$BARK  <- grew without transacting");
+    console.log("  rewardPerToken  :", fmt(await token.rewardPerToken()));
 
-    const taxEvent4 = receipt.logs
-        .map(log => { try { return token.interface.parseLog(log); } catch { return null; } })
-        .find(e => e && e.name === "TaxDeducted");
-    if (taxEvent4) {
-        console.log("Tax — Reflection:", fmt(taxEvent4.args.reflection), "| Liquidity:", fmt(taxEvent4.args.liquidity), "| Marketing:", fmt(taxEvent4.args.marketingTax));
+    console.log("\nBuyer2 transfers 100,000 $BARK to Buyer1");
+    tx = await token.connect(buyer2).transfer(buyer1.address, ethers.parseUnits("100000", 18));
+    receipt = await tx.wait();
+    await printTax(receipt, token);
+    console.log("  buyer1 balance  :", fmt(await token.balanceOf(buyer1.address)), "$BARK");
+    console.log("  buyer2 balance  :", fmt(await token.balanceOf(buyer2.address)), "$BARK");
+    console.log("  buyer3 balance  :", fmt(await token.balanceOf(buyer3.address)), "$BARK  <- grew again");
+    console.log("  rewardPerToken  :", fmt(await token.rewardPerToken()));
+
+    // ─────────────────────────────────────────────
+    // REFLECTION
+    // ─────────────────────────────────────────────
+    console.log("\n--- REFLECTION ---");
+    console.log("Buyer3 has done nothing since buying. Watch their balance grow as others trade.");
+
+    const buyer3Before = await token.balanceOf(buyer3.address);
+    console.log("\n  buyer3 balance before:", fmt(buyer3Before), "$BARK");
+
+    // Buyer1 and Buyer2 trade between themselves — Buyer3 does nothing
+    console.log("  (Buyer1 and Buyer2 trade — Buyer3 sits still)");
+    tx = await token.connect(buyer1).transfer(buyer2.address, ethers.parseUnits("150000", 18));
+    await tx.wait();
+    tx = await token.connect(buyer2).transfer(buyer1.address, ethers.parseUnits("80000", 18));
+    await tx.wait();
+
+    const buyer3After = await token.balanceOf(buyer3.address);
+    const earned = buyer3After - buyer3Before;
+    console.log("  buyer3 balance after :", fmt(buyer3After), "$BARK");
+    console.log("  earned by just holding:", fmt(earned), "$BARK");
+
+    // Now Buyer3 transacts — _settleReward fires and mints their pending rewards on-chain
+    console.log("\nBuyer3 sends 10,000 $BARK to Buyer1 (triggers reward settlement)");
+    tx = await token.connect(buyer3).transfer(buyer1.address, ethers.parseUnits("10000", 18));
+    receipt = await tx.wait();
+    await printTax(receipt, token);
+    console.log("  buyer3 balance after settlement:", fmt(await token.balanceOf(buyer3.address)), "$BARK");
+    console.log("  rewardPerToken               :", fmt(await token.rewardPerToken()));
+
+    // ─────────────────────────────────────────────
+    // OWNER CONTROLS
+    // ─────────────────────────────────────────────
+    console.log("\n--- OWNER CONTROLS ---");
+
+    // Update token price
+    const newPrice = ethers.parseUnits("0.0002", "ether");
+    tx = await token.connect(deployer).setTokenPrice(newPrice);
+    await tx.wait();
+    console.log("\nToken price updated to 0.0002 ETH per $BARK");
+
+    // Pause and verify transfers are blocked
+    await token.connect(deployer).pause();
+    console.log("Contract paused");
+    try {
+        await token.connect(buyer1).transfer(buyer2.address, ethers.parseUnits("1", 18));
+        console.log("  ERROR: transfer should have been blocked");
+    } catch {
+        console.log("  transfer blocked while paused (expected)");
     }
 
-    await printBalances("AFTER BUYER1 TRANSFERS 50 TO BUYER2", token, buyers, tokenAddress, marketing.address);
+    // Unpause
+    await token.connect(deployer).unpause();
+    console.log("Contract unpaused");
+    tx = await token.connect(buyer1).transfer(buyer2.address, ethers.parseUnits("1", 18));
+    await tx.wait();
+    console.log("  transfer succeeded after unpause");
 
-    // --- Owner withdraws ETH ---
-    console.log("\n--- Owner withdrawing ETH ---");
+    // Withdraw accumulated ETH
+    const contractEthBefore = await ethers.provider.getBalance(tokenAddress);
     const ownerEthBefore = await ethers.provider.getBalance(deployer.address);
     tx = await token.connect(deployer).withdrawETH();
     await tx.wait();
     const ownerEthAfter = await ethers.provider.getBalance(deployer.address);
-    console.log("Owner ETH before:", ethers.formatEther(ownerEthBefore));
-    console.log("Owner ETH after :", ethers.formatEther(ownerEthAfter));
-    console.log("Contract ETH    :", ethers.formatEther(await ethers.provider.getBalance(tokenAddress)), "ETH");
+    console.log("\nETH withdrawal:");
+    console.log("  contract had  :", ethers.formatEther(contractEthBefore), "ETH");
+    console.log("  contract now  :", ethers.formatEther(await ethers.provider.getBalance(tokenAddress)), "ETH");
+    console.log("  owner gained  :", ethers.formatEther(ownerEthAfter - ownerEthBefore), "ETH (approx, minus gas)");
 
-    // --- Owner withdraws BARK tokens ---
-    console.log("\n--- Owner withdrawing BARK tokens ---");
-    const ownerBarkBefore = await token.balanceOf(deployer.address);
-    tx = await token.connect(deployer).withdrawTokens();
-    await tx.wait();
-    const ownerBarkAfter = await token.balanceOf(deployer.address);
-    console.log("Owner BARK before:", fmt(ownerBarkBefore), "$BARK");
-    console.log("Owner BARK after :", fmt(ownerBarkAfter), "$BARK");
+    // ─────────────────────────────────────────────
+    // FINAL STATE
+    // ─────────────────────────────────────────────
+    console.log("\n--- FINAL STATE ---");
 
-    await printBalances("FINAL STATE", token, buyers, tokenAddress, marketing.address);
+    const totalSupply = await token.totalSupply();
+    const rewardPerToken = await token.rewardPerToken();
+
+    console.log("\nWallet balances:");
+    console.log("  contract (public pool):", fmt(await token.balanceOf(tokenAddress)),       "$BARK");
+    console.log("  marketing             :", fmt(await token.balanceOf(marketing.address)),  "$BARK");
+    console.log("  dogPark               :", fmt(await token.balanceOf(dogPark.address)),    "$BARK");
+    console.log("  dev                   :", fmt(await token.balanceOf(dev.address)),         "$BARK");
+    console.log("  charity               :", fmt(await token.balanceOf(charity.address)),     "$BARK");
+    console.log("  buyer1                :", fmt(await token.balanceOf(buyer1.address)),      "$BARK");
+    console.log("  buyer2                :", fmt(await token.balanceOf(buyer2.address)),      "$BARK");
+    console.log("  buyer3                :", fmt(await token.balanceOf(buyer3.address)),      "$BARK");
+
+    console.log("\nProtocol stats:");
+    console.log("  total supply   :", fmt(totalSupply), "$BARK (> 500M because reflection mints tokens to holders)");
+    console.log("  rewardPerToken :", fmt(rewardPerToken), "(cumulative reflection rate)");
+    console.log("  contract ETH   :", ethers.formatEther(await ethers.provider.getBalance(tokenAddress)), "ETH");
 }
 
 main().catch((err) => {

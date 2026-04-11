@@ -101,6 +101,7 @@ contract Token is
         tokenPrice = _tokenPrice;
 
         // Exclude system addresses from fees
+        isExcludedFromFee[address(0)]  = true; // minting must not be taxed
         isExcludedFromFee[msg.sender]  = true;
         isExcludedFromFee[_marketing]  = true;
         isExcludedFromFee[_dogPark]    = true;
@@ -109,6 +110,7 @@ contract Token is
         isExcludedFromFee[address(this)] = true;
 
         // Exclude system addresses from reflection rewards
+        isExcludedFromReflection[address(0)]    = true; // burn address earns nothing
         isExcludedFromReflection[msg.sender]    = true;
         isExcludedFromReflection[_marketing]    = true;
         isExcludedFromReflection[_dogPark]      = true;
