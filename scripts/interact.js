@@ -1,6 +1,6 @@
 const { ethers, upgrades } = require("hardhat");
 
-const fmt = (val) => Number(ethers.formatUnits(val, 18)).toFixed(4);
+const fmt = (val) => Number(ethers.formatUnits(val, 18)).toFixed(8);
 
 function parseTax(receipt, token) {
     return receipt.logs
