@@ -35,9 +35,8 @@ async function main() {
 
   console.log("Upgrading to TokenV2......");
   const TokenV2 = await ethers.getContractFactory("TokenV2");
-  const tokenV2 = await upgrades.upgradeProxy(tokenAddress, TokenV2, {
-  unsafeAllow: ["missing-initializer"], //
-    });
+  const tokenV2 = await upgrades.upgradeProxy(tokenAddress, TokenV2);
+  await tokenV2.initializeV2();
   await tokenV2.waitForDeployment();
   const tokenV2Address = await tokenV2.getAddress();
   console.log("Proxy address still: ", tokenV2Address);

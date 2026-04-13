@@ -230,8 +230,8 @@ contract TokenV2 is
 
     uint256 public tokenPrice;
 
-    uint256 public constant MAX_TX_AMOUNT    = 5_000_000  * 10 ** 18; // 1% of supply
-    uint256 public constant MAX_WALLET_AMOUNT = 10_000_000 * 10 ** 18; // 2% of supply
+    // uint256 public constant MAX_TX_AMOUNT    = 5_000_000  * 10 ** 18; // 1% of supply
+    // uint256 public constant MAX_WALLET_AMOUNT = 10_000_000 * 10 ** 18; // 2% of supply
     uint256 public constant TOTAL_SUPPLY     = 500_000_000 * 10 ** 18;
 
     mapping(address => bool) public isExcludedFromFee;
@@ -282,6 +282,21 @@ contract TokenV2 is
         rewardDebt[account] = rewardPerToken;
         _settling[account] = false;
     }
+
+    //prevents initializer being called twice and ownership being transferred to another person
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    /// @custom:oz-upgrades-validate-as-initializer
+    function initializeV2() external reinitializer(2) onlyOwner {
+        __ERC20_init("Bark-A-Lot", "$BARK");
+        __Ownable_init(msg.sender);
+        __Pausable_init();
+        maxTxAmount     = 5_000_000 * 10 ** 18;  
+        maxWalletAmount = 10_000_000 * 10 ** 18; 
+        }
 
     function _distributeReflection(uint256 amount) internal {
         uint256 supply = totalSupply();
@@ -336,8 +351,8 @@ contract TokenV2 is
 
         uint256 tokenAmount = _amount * 10 ** decimals();
         require(balanceOf(address(this)) >= tokenAmount, "Not enough tokens");
-        require(tokenAmount <= MAX_TX_AMOUNT, "Exceeds max tx");
-        require(balanceOf(msg.sender) + tokenAmount <= MAX_WALLET_AMOUNT, "Exceeds max wallet");
+        require(tokenAmount <= maxTxAmount, "Exceeds max tx");
+        require(balanceOf(msg.sender) + tokenAmount <= maxWalletAmount, "Exceeds max wallet");
 
         _transfer(address(this), msg.sender, tokenAmount);
 
@@ -378,8 +393,8 @@ contract TokenV2 is
         require(!blacklisted[from] && !blacklisted[to], "Blacklisted");
 
         if (!_inTaxTransfer && !isExcludedFromFee[from] && !isExcludedFromFee[to]) {
-            require(amount <= MAX_TX_AMOUNT, "Exceeds max tx");
-            require(balanceOf(to) + amount <= MAX_WALLET_AMOUNT, "Exceeds max wallet");
+            require(amount <= maxTxAmount, "Exceeds max tx");
+            require(balanceOf(to) + amount <= maxWalletAmount, "Exceeds max wallet");
         }
 
         uint256 amountAfterTax = _applyTax(from, to, amount);
