@@ -31,7 +31,7 @@ async function main() {
   const cost = AMOUNT * TOKEN_PRICE;
 
   console.log("\n--- Buying tokens ---");
-  console.log("Buyer balance before:", ethers.formatUnits(await token.balanceOf(buyer.address), 18), "$BARK");
+  console.log("Buyer balance before:", ethers.formatUnits(await token.balanceOf(deployer.address), 18), "$BARK");
 
   const tx = await token.connect(buyer).buyToken(AMOUNT, { value: cost });
   await tx.wait();
