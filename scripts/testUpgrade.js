@@ -8,7 +8,7 @@ async function main() {
   const charity = process.env.CHARITY_ADDRESS;
 
   console.log("Deployer:", deployer.address);
-  console.log("Buyer:   ", buyer.address);
+  // console.log("Buyer:   ", buyer.address);
 
   // const TOKEN_PRICE = ethers.parseUnits("0.0001", "ether"); // 0.0001 ETH per token
   // const Token = await ethers.getContractFactory("Token");
@@ -39,7 +39,12 @@ async function main() {
 
   console.log("Upgrading to TokenV2......");
   const tokenAddress = "0xD2B05FecDB2E9D83926E3d6d3b11700A2baB6FF5"; // replace with actual proxy address
+  const Token  = await ethers.getContractFactory("Token");
   const TokenV2 = await ethers.getContractFactory("TokenV2");
+
+  // Register the existing proxy in the local OZ manifest before upgrading
+  await upgrades.forceImport(tokenAddress, Token, { kind: "uups" });
+
   const tokenV2 = await upgrades.upgradeProxy(tokenAddress, TokenV2);
   await tokenV2.initializeV2();
   await tokenV2.waitForDeployment();

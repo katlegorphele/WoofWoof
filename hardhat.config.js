@@ -19,6 +19,18 @@ module.exports = {
         ? [process.env.DEPLOYER_PRIVATE_KEY]
         : [],
     },
+    bnbTestnet: {
+      url: process.env.BNB_RPC_URL || "",
+      accounts: process.env.DEPLOYER_PRIVATE_KEY
+        ? [process.env.DEPLOYER_PRIVATE_KEY]
+        : [],
+    },
+    baseSepolia: {
+      url: process.env.BASE_SEPOLIA_RPC_URL || "",
+      accounts: process.env.DEPLOYER_PRIVATE_KEY
+        ? [process.env.DEPLOYER_PRIVATE_KEY]
+        : [],
+    },
   },
 
   solidity: {
@@ -33,5 +45,9 @@ module.exports = {
 
   etherscan: {
     apiKey: process.env.ETHERSCAN_API_KEY,
+  },
+
+  sourcify: {
+    enabled: true,
   },
 };
