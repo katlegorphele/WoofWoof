@@ -1,7 +1,12 @@
 const { ethers, upgrades } = require("hardhat");
 
 async function main() {
-  const [deployer, marketing, dogPark, dev, charity, buyer] = await ethers.getSigners();
+  const [deployer] = await ethers.getSigners();
+  const marketing = process.env.MARKETING_ADDRESS;
+  const dogPark = process.env.DOG_PARK_ADDRESS;
+  const dev = process.env.DEV_ADDRESS;
+  const charity = process.env.CHARITY_ADDRESS;
+  
 
   console.log("Deployer:", deployer.address);
   console.log("Buyer:   ", buyer.address);
